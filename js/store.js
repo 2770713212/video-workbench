@@ -21,6 +21,7 @@ export class TimelineStore {
     this.shots = shots.map((s, i) => ({
       tag: tags[i % 5],
       caption: "",
+      effect: "none",
       motion: "静止",
       source: "original",
       theme: "赛博网格",
@@ -37,6 +38,14 @@ export class TimelineStore {
   edit(i, data) {
     this.save();
     Object.assign(this.shots[i], data);
+  }
+  matchFastCuts() {
+    const fast = this.shots.filter(s => s.duration < 1.5);
+    if (fast.length) {
+      this.save();
+      fast.forEach((s, i) => { s.effect = i % 2 ? "pop" : "whoosh"; });
+    }
+    return fast.length;
   }
   split(i, t) {
     const s = this.shots[i];
@@ -160,6 +169,7 @@ export class TimelineStore {
       throw Error("时间轴格式或素材时长不匹配");
     this.save();
     this.shots = shots.map((s) => ({
+      effect: "none",
       ...s,
       duration: s.endTime - s.startTime,
     }));

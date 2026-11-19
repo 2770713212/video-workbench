@@ -1,11 +1,13 @@
 import { DemoGenerator, landscape } from "./demo-generator.js";
 import { SceneDetector, video } from "./detector.js";
 import { TimelineStore, tags } from "./store.js";
+import { AudioEngine, effects } from "./audio.js";
 import { CanvasRenderer } from "./renderer.js";
 import { VideoExporter } from "./exporter.js";
 const $ = (id) => document.getElementById(id),
   store = new TimelineStore(),
-  renderer = new CanvasRenderer($("screen"), store),
+  audio = new AudioEngine(),
+  renderer = new CanvasRenderer($("screen"), store, audio),
   detector = new SceneDetector();
 let selected = 0,
   busy = false,
@@ -19,6 +21,7 @@ const fmt = (t) =>
 function opts(id, values) {
   values.forEach((v) => $(id).add(new Option(v, v)));
 }
+for (const [value, label] of effects) $("effect").add(new Option(label, value));
 opts("tag", tags);
 opts("motion", ["静止", "缓慢推近", "缓慢拉远", "卡点微震动"]);
 opts("theme", ["赛博网格", "极光渐变", "暗黑噪点"]);
@@ -64,6 +67,8 @@ function activate(i) {
     "SHOT " + num(i) + "　/　" + s.duration.toFixed(1) + " s";
   for (const key of ["caption", "tag", "motion", "theme"])
     $(key).value = s[key];
+  $("effect").value = s.effect || "none";
+  $("audition").disabled = $("effect").value === "none";
   limit();
   $("theme").hidden = s.source !== "dynamic";
   $("replace").hidden = s.source !== "asset";
@@ -115,7 +120,19 @@ function render() {
     card.append(img, span, caption);
     card.onclick = b.onclick = () => jump(s.startTime);
     $("blocks").append(b);
-    $("cards").append(card);
+    const item = document.createElement("div");
+    const effect = $("effect").cloneNode(true);
+    effect.removeAttribute("id");
+    effect.setAttribute("aria-label", "分镜 " + num(i) + " 切镜音效");
+    effect.value = s.effect || "none";
+    effect.onchange = () => {
+      stop();
+      store.edit(i, { effect: effect.value });
+      render();
+      jump(s.startTime);
+    };
+    item.append(card, effect);
+    $("cards").append(item);
   });
   $("undo").disabled = !store.past.length;
   $("redo").disabled = !store.future.length;
@@ -156,6 +173,7 @@ async function load(blob, name) {
     const shots = await scan(v);
     store.reset(shots);
     renderer.original = v;
+    audio.setOriginal(url);
     URL.revokeObjectURL(originalUrl);
     originalUrl = url;
     selected = 0;
@@ -203,16 +221,19 @@ window.ondrop = (e) => {
 };
 $("play").onclick = async () => {
   if (renderer.playing) return stop();
-  $("play").textContent = "Ⅱ";
-  $("play").ariaLabel = "暂停";
-  await renderer.play(
-    renderer.time >= renderer.duration - 0.01 ? 0 : renderer.time,
-    (t) => {
-      view(t);
-      if (renderer.index(t) !== selected) activate(renderer.index(t));
-    },
-  );
-  if (!renderer.playing) $("play").textContent = "▶";
+  try {
+    await audio.ensureContext();
+    $("play").textContent = "Ⅱ";
+    $("play").ariaLabel = "暂停";
+    await renderer.play(
+      renderer.time >= renderer.duration - 0.01 ? 0 : renderer.time,
+      (t) => {
+        view(t);
+        if (renderer.index(t) !== selected) activate(renderer.index(t));
+      },
+    );
+    if (!renderer.playing) $("play").textContent = "▶";
+  } catch (error) { stop(); status(error.message); }
 };
 $("scrub").oninput = (e) => jump(+e.target.value);
 function edit(data) {
@@ -221,7 +242,7 @@ function edit(data) {
   render();
   renderer.goto(renderer.time);
 }
-for (const key of ["tag", "motion", "theme"])
+for (const key of ["tag", "motion", "theme", "effect"])
   $(key).onchange = (e) => edit({ [key]: e.target.value });
 $("caption").onfocus = () => stop();
 $("caption").oninput = (e) => {
@@ -401,4 +422,38 @@ $("scriptForm").onsubmit = async (event) => {
   render();
   await jump(renderer.time);
   toast("已导入 " + count + " 个分镜，可一键撤销");
+};
+
+$("autoFx").onclick = () => {
+  stop();
+  const count = store.matchFastCuts();
+  render();
+  toast(count ? "已为 " + count + " 个快切镜头匹配音效" : "当前没有短于 1.5 秒的镜头");
+};
+$("audition").onclick = async () => {
+  stop();
+  try { await audio.ensureContext(); audio.effect($("effect").value); }
+  catch (error) { status(error.message); }
+};
+$("pickMusic").onclick = () => $("musicFile").click();
+$("musicFile").onchange = e => {
+  const file = e.target.files[0];
+  if (file) job("导入背景音乐", async () => {
+    await audio.loadBGM(file);
+    $("musicName").textContent = file.name;
+  });
+  e.target.value = "";
+};
+$("musicVolume").oninput = e => {
+  audio.volume = Number(e.target.value) / 100;
+  $("musicLevel").textContent = e.target.value + "%";
+  audio.updateLevels();
+};
+$("musicLoop").onchange = e => {
+  audio.loop = e.target.checked;
+  if (renderer.playing) { stop(); $("play").click(); }
+};
+$("originalAudio").onchange = e => {
+  audio.keepOriginal = e.target.checked;
+  audio.updateLevels();
 };

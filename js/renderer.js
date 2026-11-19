@@ -1,7 +1,8 @@
 import { landscape } from "./demo-generator.js";
 import { seek } from "./detector.js";
 export class CanvasRenderer {
-  constructor(canvas, store) {
+  constructor(canvas, store, audio) {
+    this.audio = audio;
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d");
     this.store = store;
@@ -18,6 +19,7 @@ export class CanvasRenderer {
     return i < 0 ? this.store.shots.length - 1 : i;
   }
   pause() {
+    this.audio.stop();
     this.generation++;
     this.playing = false;
     cancelAnimationFrame(this.frame);
@@ -46,11 +48,16 @@ export class CanvasRenderer {
       await seek(m, Math.min(m.duration - 0.001, this.local(s, this.time, m)));
     if (token === this.generation) this.draw(this.time);
   }
-  async play(from, onTick) {
-    await this.goto(from);
+  async play(from, onTick, onStart) {
+    const seeking = this.goto(from);
     const token = this.generation;
+    await seeking;
+    if (token !== this.generation) return;
+    await this.audio.prepare(from);
+    if (token !== this.generation) return;
+    onStart?.();
+    this.audio.start(from, this.store.shots);
     this.playing = true;
-    const start = performance.now();
     return new Promise((resolve, reject) => {
       this.finish = resolve;
       const tick = () => {
@@ -58,7 +65,7 @@ export class CanvasRenderer {
         try {
           const t = Math.min(
               this.duration,
-              from + (performance.now() - start) / 1000,
+              from + this.audio.ctx.currentTime - this.audio.anchor,
             ),
             s = this.store.shots[this.index(t)],
             m = this.media(s);

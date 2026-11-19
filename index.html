@@ -21,6 +21,7 @@
           <h1>拉片拆解与节奏克隆</h1>
         </div>
         <div class="actions">
+          <button id="autoFx">一键为所有快切镜头匹配音效</button>
           <button id="aiCopy">复制 AI 改写提示词</button>
           <button id="aiImport">导入 AI 脚本 (JSON)</button>
           <button id="demo">▸ 加载内置测试样片</button
@@ -63,6 +64,14 @@
               <i>▥</i> 节奏时间轴 <label>RHYTHM TIMELINE</label
               ><b id="count"></b>
             </h2>
+            <div class="audioBar">
+              <strong>背景音乐 (BGM)</strong><button id="pickMusic">选择本地音乐</button>
+              <input id="musicFile" type="file" accept="audio/*,.mp3,.wav,.m4a" hidden>
+              <span id="musicName">未选择</span>
+              <label>音量 <input id="musicVolume" type="range" min="0" max="100" value="50"> <output id="musicLevel">50%</output></label>
+              <label><input id="musicLoop" type="checkbox" checked> 循环播放</label>
+              <label><input id="originalAudio" type="checkbox" checked> 保留原视频音轨</label>
+            </div>
             <div id="ruler"></div>
             <div id="blocks"></div>
             <div class="legend">
@@ -104,6 +113,7 @@
                 <label>节奏定位<select id="tag"></select></label
                 ><label>运镜动效<select id="motion"></select></label>
               </div>
+              <div class="effectRow"><label>切镜音效<select id="effect"></select></label><button id="audition">▷ 试听</button></div>
               <label class="captionLabel"
                 >替换字幕 <small id="limit"></small></label
               ><textarea

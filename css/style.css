@@ -366,15 +366,20 @@ input[type="range"]::-webkit-slider-thumb {
   overflow-x: auto;
   padding: 14px 0;
 }
+#cards > div {
+  flex: 1 0 84px;
+  min-width: 0;
+}
+#cards select { font-size: 11px; padding: 5px 2px; }
 #cards button {
-  flex: 1 0 70px;
+  width: 100%;
   min-width: 0;
   padding: 3px;
   background: #24242e;
   text-align: left;
   overflow: hidden;
 }
-#cards .active,
+#cards .active button,
 #sources .active {
   border-color: var(--pink);
   background: #352c45;
@@ -542,3 +547,11 @@ dialog input, dialog textarea { width: 100%; margin: 7px 0; padding: 10px; font:
 .feedback { color: var(--amber); font-size: 13px; }
 #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #232c30; color: var(--cyan); border: 1px solid #425d5c; border-radius: 8px; padding: 10px 18px; pointer-events: none; }
 #cards .cardCaption { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--muted); padding: 0 3px; }
+.audioBar, .effectRow { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+.audioBar { padding: 12px 18px; border-bottom: 1px solid var(--line); font-size: 12px; }
+.audioBar label { display: inline-flex; align-items: center; gap: 4px; }
+.audioBar input { accent-color: var(--pink); }
+.audioBar input[type=range] { width: 75px; }
+#musicName { max-width: 18ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.effectRow { margin-top: 9px; align-items: flex-end; }
+.effectRow label { flex: 1; }
