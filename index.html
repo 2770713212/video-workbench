@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#111218" />
+    <title>CUTLAB · 爆款视频拉片拆解与节奏克隆工作台</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="./css/style.css" />
+  </head>
+  <body>
+    <header>
+      <div class="logo"><i>≋</i>CUT<span>LAB</span></div>
+      <b class="nav">剪辑工作台</b>
+      <div class="local"><em></em> 本地工作空间</div>
+    </header>
+    <main>
+      <section class="intro">
+        <div>
+          <small>VIDEO ANALYSIS STUDIO</small>
+          <h1>拉片拆解与节奏克隆</h1>
+        </div>
+        <div class="actions">
+          <button id="demo">▸ 加载内置测试样片</button
+          ><button id="load">↑ 导入视频</button
+          ><button id="export" class="primary">⇩ 导出视频</button>
+        </div>
+      </section>
+      <div class="workspace">
+        <section class="panel preview">
+          <h2><i>▣</i> 合成预览 <label>PROGRAM MONITOR</label></h2>
+          <div class="stage">
+            <span class="stageLabel">● PREVIEW</span
+            ><canvas id="screen" width="1080" height="1920"></canvas
+            ><span class="ratio">9:16</span>
+          </div>
+          <div class="transport">
+            <button id="play" aria-label="播放">▶</button
+            ><strong id="clock">00:00.0</strong><span>/</span
+            ><span id="total"></span
+            ><input
+              id="scrub"
+              aria-label="播放位置"
+              type="range"
+              min="0"
+              step=".01"
+              value="0"
+            />
+          </div>
+          <div class="file">
+            <i>▧</i>
+            <div>
+              <strong id="filename">霓虹地平线 · 节奏样板</strong
+              ><small id="metadata">1080 × 1920　 /　 合成画布</small>
+            </div>
+          </div>
+        </section>
+        <div class="right">
+          <section class="panel timeline">
+            <h2>
+              <i>▥</i> 节奏时间轴 <label>RHYTHM TIMELINE</label
+              ><b id="count"></b>
+            </h2>
+            <div id="ruler"></div>
+            <div id="blocks"></div>
+            <div class="legend">
+              <span>● 快切 &lt;1.5s</span><span>● 常规</span
+              ><span>● 慢镜 &gt;3s</span>
+            </div>
+            <div class="scan">
+              <span>切镜灵敏度</span
+              ><input
+                type="range"
+                min=".1"
+                max=".9"
+                step=".01"
+                value=".5"
+                id="sense"
+                aria-label="切镜灵敏度"
+              /><output id="sensVal">0.50</output
+              ><button id="scan">⟳ 重新扫描</button>
+            </div>
+          </section>
+          <section class="panel editor">
+            <h2>
+              <i>▤</i> 分镜编辑器 <label>SHOT EDITOR</label>
+              <div class="history">
+                <button id="undo" aria-label="撤销">↶</button
+                ><button id="redo" aria-label="重做">↷</button>
+              </div>
+            </h2>
+            <div id="cards"></div>
+            <div class="detail">
+              <div class="detailHead">
+                <strong id="shotTitle"></strong>
+                <div>
+                  <button id="split">✂ 拆分</button
+                  ><button id="merge">⇄ 合并</button>
+                </div>
+              </div>
+              <div class="fields">
+                <label>节奏定位<select id="tag"></select></label
+                ><label>运镜动效<select id="motion"></select></label>
+              </div>
+              <label class="captionLabel"
+                >替换字幕 <small id="limit"></small></label
+              ><textarea
+                id="caption"
+                rows="2"
+                aria-label="替换字幕"
+                placeholder="输入字幕，用 [关键词] 高亮重点"
+              ></textarea>
+              <label>画面来源</label>
+              <div id="sources">
+                <button data-src="original">▣ 原视频</button
+                ><button data-src="asset">▧ 本地素材</button
+                ><button data-src="dynamic">✧ 动态背景</button>
+              </div>
+              <select id="theme" aria-label="动态背景" hidden></select
+              ><button id="replace" hidden>更换本地素材</button>
+            </div>
+          </section>
+        </div>
+      </div>
+      <footer>
+        <span id="status" role="status">● 工作台就绪</span
+        ><progress id="progress" max="1" hidden></progress
+        ><a id="download" hidden>下载视频</a>
+        <div>
+          <button id="jsonIn">导入 JSON</button
+          ><button id="jsonOut">导出 JSON</button>
+        </div>
+      </footer>
+    </main>
+    <input id="movie" type="file" accept="video/*,.mov" hidden /><input
+      id="asset"
+      type="file"
+      accept="image/*,video/*"
+      hidden
+    /><input id="json" type="file" accept=".json" hidden />
+    <script type="module" src="./js/app.js"></script>
+  </body>
+</html>
