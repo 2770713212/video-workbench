@@ -1,6 +1,6 @@
 import { DemoGenerator, landscape } from "./demo-generator.js";
 import { SceneDetector, video } from "./detector.js";
-import { TimelineStore, tags } from "./store.js";
+import { TimelineStore, ProjectDB, tags } from "./store.js";
 import { AudioEngine, effects } from "./audio.js";
 import { CanvasRenderer } from "./renderer.js";
 import { VideoExporter } from "./exporter.js";
@@ -13,6 +13,10 @@ let selected = 0,
   busy = false,
   originalUrl,
   exportUrl;
+const db = new ProjectDB();
+let autosaveReady = false, timer, pendingWrite = Promise.resolve();
+let sourceBlob, musicBlob;
+const assetBlobs = new Map();
 const fmt = (t) =>
     String(Math.floor(t / 60)).padStart(2, "0") +
     ":" +
@@ -91,7 +95,11 @@ async function jump(t) {
   await renderer.goto(t);
 }
 function render() {
+  scheduleSave();
   const shots = store.shots;
+  const empty = !shots.length;
+  document.querySelector(".detail").hidden = empty;
+  for (const id of ["play","scrub","export","jsonIn","jsonOut","aiCopy","aiImport","autoFx"]) $(id).disabled = empty;
   $("count").textContent = shots.length + " 个分镜";
   $("scrub").max = renderer.duration;
   $("total").textContent = fmt(renderer.duration);
@@ -136,7 +144,11 @@ function render() {
   });
   $("undo").disabled = !store.past.length;
   $("redo").disabled = !store.future.length;
-  activate(Math.min(selected, shots.length - 1));
+  if (shots.length) activate(Math.min(selected, shots.length - 1));
+  else {
+    renderer.ctx.clearRect(0,0,1080,1920);
+    view(0);
+  }
 }
 function setProgress(t) {
   $("progress").value = t;
@@ -176,6 +188,7 @@ async function load(blob, name) {
     audio.setOriginal(url);
     URL.revokeObjectURL(originalUrl);
     originalUrl = url;
+    sourceBlob = blob;
     selected = 0;
     $("filename").textContent = name;
     render();
@@ -246,6 +259,7 @@ for (const key of ["tag", "motion", "theme", "effect"])
   $(key).onchange = (e) => edit({ [key]: e.target.value });
 $("caption").onfocus = () => stop();
 $("caption").oninput = (e) => {
+  scheduleSave();
   store.edit(selected, { caption: e.target.value });
   $("cards").children[selected].querySelector(".cardCaption").textContent = e.target.value;
   limit();
@@ -283,7 +297,7 @@ document
           : edit({ source: b.dataset.src })),
   );
 $("replace").onclick = () => $("asset").click();
-async function asset(url) {
+async function asset(url, blob) {
   if (renderer.assets.has(url)) return;
   let m;
   if (url?.startsWith("data:video/")) m = await video(url);
@@ -292,19 +306,15 @@ async function asset(url) {
     m.src = url;
     await m.decode();
   } else throw Error("无效素材");
+  assetBlobs.set(url, blob || await (await fetch(url)).blob());
   renderer.assets.set(url, m);
 }
 $("asset").onchange = (e) => {
   const f = e.target.files[0];
   if (f)
     job("加载素材", async () => {
-      const data = await new Promise((ok, fail) => {
-        const r = new FileReader();
-        r.onload = () => ok(r.result);
-        r.onerror = () => fail(r.error);
-        r.readAsDataURL(f);
-      });
-      await asset(data);
+      const data = await dataURL(f);
+      await asset(data, f);
       edit({ source: "asset", asset: data });
     });
   e.target.value = "";
@@ -350,8 +360,6 @@ $("export").onclick = () =>
     a.click();
     await jump(0);
   });
-render();
-jump(0);
 for (const panel of document.querySelectorAll(".panel")) {
   const toggle = document.createElement("button");
   toggle.className = "fold";
@@ -440,20 +448,157 @@ $("musicFile").onchange = e => {
   const file = e.target.files[0];
   if (file) job("导入背景音乐", async () => {
     await audio.loadBGM(file);
+    musicBlob = file;
+    scheduleSave();
     $("musicName").textContent = file.name;
   });
   e.target.value = "";
 };
 $("musicVolume").oninput = e => {
+  scheduleSave();
   audio.volume = Number(e.target.value) / 100;
   $("musicLevel").textContent = e.target.value + "%";
   audio.updateLevels();
 };
 $("musicLoop").onchange = e => {
+  scheduleSave();
   audio.loop = e.target.checked;
   if (renderer.playing) { stop(); $("play").click(); }
 };
 $("originalAudio").onchange = e => {
+  scheduleSave();
   audio.keepOriginal = e.target.checked;
   audio.updateLevels();
 };
+
+function dataURL(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+function snapshot() {
+  // Replace in-memory data URLs with indices into the binary attachment table.
+  const assets = [], ids = new Map();
+  const shots = store.shots.map(shot => {
+    const copy = {...shot};
+    if (copy.asset && assetBlobs.has(copy.asset)) {
+      if (!ids.has(copy.asset)) {
+        ids.set(copy.asset, assets.length);
+        assets.push(assetBlobs.get(copy.asset));
+      }
+      copy.assetId = ids.get(copy.asset);
+      delete copy.asset;
+    }
+    return copy;
+  });
+  return {shots, assets, sourceBlob, musicBlob, filename:$("filename").textContent,
+    style:renderer.captionStyle, y:renderer.captionY, guides:!$("guides").hidden,
+    volume:audio.volume, loop:audio.loop, original:audio.keepOriginal, time:renderer.time};
+}
+
+function flushSave() {
+  if (!timer) return;
+  clearTimeout(timer);
+  timer = null;
+  const project = snapshot();
+  pendingWrite = pendingWrite.then(() => db.write(project)).catch(() => {
+    status("自动存档失败，请检查本地存储空间或浏览器权限");
+  });
+}
+function scheduleSave() {
+  if (!autosaveReady) return;
+  clearTimeout(timer);
+  timer = setTimeout(flushSave,1000);
+}
+document.addEventListener("visibilitychange", () => { if (document.hidden) flushSave(); });
+window.addEventListener("pagehide", flushSave);
+
+function updateStyle() {
+  renderer.captionStyle = $("captionStyle").value;
+  renderer.captionY = Number($("captionY").value);
+  if (store.shots.length) renderer.draw(renderer.time);
+  scheduleSave();
+}
+$("captionStyle").onchange = updateStyle;
+$("captionY").oninput = updateStyle;
+function setGuides(show) {
+  $("guides").hidden = !show;
+  $("safeToggle").setAttribute("aria-pressed", String(show));
+}
+$("safeToggle").onclick = () => { setGuides($("guides").hidden); scheduleSave(); };
+
+$("newProject").onclick = async () => {
+  if (!confirm("清空当前工程的本地存档和素材，创建空白工程？")) return;
+  stop();
+  clearTimeout(timer); timer = null;
+  document.querySelector("main").inert = true;
+  try {
+    await pendingWrite;
+    await db.write({shots:[], assets:[], filename:"空白工程"});
+    location.reload();
+  } catch {
+    document.querySelector("main").inert = false;
+    status("清空本地工程失败，请检查浏览器存储权限");
+  }
+};
+
+async function restore(project) {
+  const urls = [];
+  for (const blob of project.assets) {
+    const url = await dataURL(blob);
+    await asset(url, blob);
+    urls.push(url);
+  }
+  store.reset(project.shots.map(shot => {
+    const {assetId, ...copy} = shot;
+    if (assetId !== undefined) copy.asset = urls[assetId];
+    return copy;
+  }));
+  sourceBlob = project.sourceBlob;
+  if (sourceBlob) {
+    originalUrl = URL.createObjectURL(sourceBlob);
+    renderer.original = await video(originalUrl);
+    audio.setOriginal(originalUrl);
+  }
+  musicBlob = project.musicBlob;
+  if (musicBlob) {
+    // Decode without resuming a realtime AudioContext before a user gesture.
+    const decoder = new OfflineAudioContext(2,1,48000);
+    audio.music = await decoder.decodeAudioData(await musicBlob.arrayBuffer());
+    $("musicName").textContent = musicBlob.name || "本地背景音乐";
+  }
+  $("filename").textContent = project.filename;
+  $("captionStyle").value = project.style ?? "classic-yellow";
+  $("captionY").value = project.y ?? 78;
+  renderer.captionStyle = $("captionStyle").value;
+  renderer.captionY = Number($("captionY").value);
+  audio.volume = project.volume ?? 0.5;
+  $("musicVolume").value = Math.round(audio.volume*100);
+  $("musicLevel").textContent = $("musicVolume").value+"%";
+  $("musicLoop").checked = audio.loop = project.loop ?? true;
+  $("originalAudio").checked = audio.keepOriginal = project.original ?? true;
+  setGuides(Boolean(project.guides));
+}
+
+document.querySelector("main").inert = true;
+try {
+  const saved = await db.read();
+  if (saved) await restore(saved);
+  render();
+  if (store.shots.length) await jump(Math.min(saved?.time || 0,renderer.duration));
+  autosaveReady = true;
+  if (saved) status(saved.shots.length ? "● 已恢复本地工程" : "导入视频或加载样片开始编辑");
+} catch {
+  render();
+  if (store.shots.length) await jump(0);
+  status("本地存档不可用，当前工程未开启自动保存");
+} finally {
+  document.querySelector("main").inert = false;
+}
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("./sw.js").catch(() => status("离线资源注册失败，请联网重新打开"));
+}

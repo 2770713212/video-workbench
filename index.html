@@ -5,7 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#111218" />
     <title>CUTLAB · 爆款视频拉片拆解与节奏克隆工作台</title>
-    <link rel="icon" href="data:," />
+    <link rel="icon" href="./assets/icon.svg">
+    <link rel="manifest" href="./manifest.json">
+    <link rel="apple-touch-icon" href="./assets/icon-192.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="stylesheet" href="./css/style.css" />
   </head>
   <body>
@@ -21,6 +25,7 @@
           <h1>拉片拆解与节奏克隆</h1>
         </div>
         <div class="actions">
+          <button id="newProject">新建空白工程（清空缓存）</button>
           <button id="autoFx">一键为所有快切镜头匹配音效</button>
           <button id="aiCopy">复制 AI 改写提示词</button>
           <button id="aiImport">导入 AI 脚本 (JSON)</button>
@@ -32,9 +37,14 @@
       <div class="workspace">
         <section class="panel preview">
           <h2><i>▣</i> 合成预览 <label>PROGRAM MONITOR</label></h2>
+          <div class="captionTools">
+            <label>字幕风格预设<select id="captionStyle"><option value="classic-yellow">经典黄白大字风</option><option value="highlighter-bar">荧光笔涂抹风</option><option value="typewriter-pop">逐字弹出打字机风</option><option value="cinema-caption">电影感黑边风</option></select></label>
+            <label>字幕垂直位置 (Y轴)<input id="captionY" type="range" min="0" max="100" value="78"></label>
+          </div>
           <div class="stage">
             <span class="stageLabel">● PREVIEW</span
-            ><canvas id="screen" width="1080" height="1920"></canvas
+            ><button id="safeToggle" aria-pressed="false">安全区参考线</button>
+            <div class="screenFrame"><canvas id="screen" width="1080" height="1920"></canvas><div id="guides" hidden><span class="rightGuide">互动区</span><span class="bottomGuide">底部文案区</span></div></div
             ><span class="ratio">9:16</span>
           </div>
           <div class="transport">

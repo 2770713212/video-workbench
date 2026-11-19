@@ -175,3 +175,35 @@ export class TimelineStore {
     }));
   }
 }
+
+// Each Pages project on the same origin has its own record.
+export class ProjectDB {
+  constructor() {
+    this.key = new URL(".", location.href).pathname;
+    this.connection = new Promise((resolve, reject) => {
+      const request = indexedDB.open("ViralRhythmWorkbench", 1);
+      request.onupgradeneeded = () => request.result.createObjectStore("projects");
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async read() {
+    const db = await this.connection;
+    return new Promise((resolve, reject) => {
+      const request = db.transaction("projects").objectStore("projects").get(this.key);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async write(project) {
+    const db = await this.connection;
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction("projects", "readwrite");
+      transaction.objectStore("projects").put(project, this.key);
+      transaction.oncomplete = resolve;
+      transaction.onabort = () => reject(transaction.error);
+    });
+  }
+}

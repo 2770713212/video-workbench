@@ -6,6 +6,8 @@ export class CanvasRenderer {
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d");
     this.store = store;
+    this.captionStyle = "classic-yellow";
+    this.captionY = 78;
     this.assets = new Map();
     this.time = 0;
     this.playing = false;
@@ -165,40 +167,82 @@ export class CanvasRenderer {
       }
     }
     c.restore();
-    if (s.caption) {
-      const lines = [[]];
-      let x = 0;
-      c.font = "bold 58px sans-serif";
-      for (const part of s.caption.match(/\[[^\]]*\]|[^\[]+|\[/g) || []) {
-        const hot = part.startsWith("[") && part.endsWith("]");
-        for (const ch of hot ? part.slice(1, -1) : part) {
-          let width = c.measureText(ch).width;
-          if (x + width > 860 || ch === "\n") {
-            lines.push([]);
-            x = 0;
-          }
-          if (ch !== "\n") {
-            lines.at(-1).push({ ch, width, hot });
-            x += width;
-          }
+    this.drawCaption(s.caption, t - s.startTime, p);
+  }
+
+  drawCaption(text, elapsed, progress) {
+    const c = this.ctx, style = this.captionStyle;
+    const cinema = style === "cinema-caption", marker = style === "highlighter-bar";
+    const bar = 1920 * 0.12;
+    if (cinema) {
+      c.fillStyle = "#000";
+      c.fillRect(0, 0, 1080, bar);
+      c.fillRect(0, 1920 - bar, 1080, bar);
+    }
+    if (!text) return;
+    c.save();
+    c.textBaseline = "middle";
+    c.lineJoin = "round";
+    const rows = [[]];
+    let width = 0, total = 0, group = 0;
+    for (const part of text.match(/\[[^\]]*\]|[^\[]+|\[/g) || []) {
+      const hot = part.startsWith("[") && part.endsWith("]");
+      group++;
+      const size = cinema ? 42 : hot && style === "classic-yellow" ? 69 : 60;
+      const font = (cinema ? "500 " : "900 ") + size + "px sans-serif";
+      c.font = font;
+      for (const ch of hot ? part.slice(1,-1) : part) {
+        const advance = c.measureText(ch).width + (cinema ? 2 : 0);
+        if (ch === "\n" || width + advance > 910) { rows.push([]); width = 0; }
+        if (ch !== "\n") {
+          rows.at(-1).push({ch, hot, font, advance, group, index:total++});
+          width += advance;
         }
-      }
-      const visible = lines.slice(0, 17);
-      let y = 1610 - visible.length * 78;
-      c.fillStyle = "#0c0916ba";
-      c.beginPath();
-      c.roundRect(80, y - 20, 920, visible.length * 78 + 30, 25);
-      c.fill();
-      for (const row of visible) {
-        let left = (1080 - row.reduce((a, b) => a + b.width, 0)) / 2;
-        y += 58;
-        for (const a of row) {
-          c.fillStyle = a.hot ? "#ffd363" : "white";
-          c.fillText(a.ch, left, y);
-          left += a.width;
-        }
-        y += 20;
       }
     }
+    const leading = cinema ? 58 : 86;
+    const scale = Math.min(1, (cinema ? bar-24 : 1820)/(rows.length*leading));
+    const height = rows.length * leading * scale;
+    const position = this.captionY / 100;
+    const top = cinema ? 1920-bar+12+(bar-24-height)*position :
+      Math.max(24, Math.min(1896-height, 1920*position-height/2));
+    c.translate(540, top);
+    c.scale(scale, scale);
+    const reveal = Math.min(total, 1 + progress * total / 0.82);
+    rows.forEach((row, line) => {
+      const y = (line+0.5)*leading;
+      let x = -row.reduce((n,g) => n + g.advance, 0)/2;
+      if (marker) {
+        let left = x;
+        for (let i=0; i<row.length;) {
+          const first = row[i]; let span = 0;
+          while (i<row.length && row[i].group===first.group) span += row[i++].advance;
+          if (first.hot) {
+            c.save(); c.translate(left-4,y); c.rotate(-2*Math.PI/180);
+            c.fillStyle = "#84CC16"; c.beginPath();
+            c.roundRect(0,-38,(span+8)*Math.min(1,elapsed/0.32),74,8); c.fill(); c.restore();
+          }
+          left += span;
+        }
+      }
+      for (const g of row) {
+        if (style === "typewriter-pop" && g.index >= reveal) break;
+        c.save(); c.translate(x+g.advance/2,y);
+        if (style === "typewriter-pop") {
+          const age = reveal-g.index;
+          const pop = 1+0.23*Math.exp(-3*age)*Math.sin(5*age);
+          c.scale(pop,pop);
+        }
+        c.textAlign = "center"; c.font = g.font;
+        if (!cinema) {
+          c.strokeStyle = "#101015"; c.lineWidth = marker && g.hot ? 3 : 9;
+          c.shadowColor = "#000"; c.shadowOffsetY = 5;
+          c.strokeText(g.ch,0,0); c.shadowOffsetY = 0;
+        }
+        c.fillStyle = g.hot ? (marker && elapsed>=0.32 ? "#101015" : "#FACC15") : "#fff";
+        c.fillText(g.ch,0,0); c.restore(); x += g.advance;
+      }
+    });
+    c.restore();
   }
 }
