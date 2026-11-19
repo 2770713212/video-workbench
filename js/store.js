@@ -5,6 +5,12 @@ export const tags = [
   "核心干货",
   "结尾引导",
 ];
+const backgrounds = new Map([
+  ["cyber-grid", "赛博网格"], ["aurora-gradient", "极光渐变"], ["dark-noise", "暗黑噪点"]
+]);
+const motions = new Map([
+  ["static", "静止"], ["zoom-in", "缓慢推近"], ["zoom-out", "缓慢拉远"], ["beat-shake", "卡点微震动"]
+]);
 export class TimelineStore {
   constructor() {
     this.shots = [];
@@ -71,6 +77,65 @@ export class TimelineStore {
       this.past.push(this.shots);
       this.shots = this.future.pop();
     }
+  }
+  exportAIPrompt(topic) {
+    if (!topic?.trim()) throw Error("请填写新视频主题或核心卖点");
+    const brief = this.shots.map((shot, i) => ({
+      index: i + 1, duration: shot.duration.toFixed(1), tag: shot.tag,
+      maxChars: Math.floor(shot.duration * 4.5)
+    }));
+    return [
+      "请为一条竖屏短视频撰写连贯的分镜字幕。",
+      "新视频主题/核心卖点：" + topic.trim(),
+      "按以下分镜逐条创作。duration 的单位是秒，保留每个 index 和 tag，字幕须符合节奏定位，可见字符数不得超过 maxChars。",
+      JSON.stringify(brief, null, 2),
+      "每句话用 [方括号] 标出最核心的 1–2 个关键词，括号不计入字数。",
+      "bgPreset 可选：" + [...backgrounds.keys()].join("、"),
+      "cameraMotion 可选：" + [...motions.keys()].join("、"),
+      "仅输出合法 JSON，省略代码围栏和解释。按以下结构填写全部分镜：",
+      '{"scenes":[{"index":1,"tag":"黄金3秒钩子","subtitle":"试试[新方法]","bgPreset":"cyber-grid","cameraMotion":"zoom-in"}]}'
+    ].join("\n");
+  }
+  importAIScript(rawText) {
+    const fenced = rawText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/i);
+    const body = fenced?.[1] ?? rawText.match(/\{[\s\S]*\}/)?.[0];
+    if (!body) throw Error("请粘贴含 scenes 数组的 JSON 对象");
+    let script;
+    try { script = JSON.parse(body); }
+    catch { throw Error("JSON 格式有误，请检查双引号、逗号和括号"); }
+    if (!Array.isArray(script.scenes) || !script.scenes.length)
+      throw Error("scenes 必须是非空数组");
+    const seen = new Set();
+    const next = this.shots.slice();
+    for (const [position, scene] of script.scenes.entries()) {
+      const index = scene?.index;
+      if (!Number.isInteger(index) || index < 1 || index > next.length)
+        throw Error("第 " + (position + 1) + " 项需要有效的 index（1–" + next.length + "）");
+      if (seen.has(index)) throw Error("分镜 index 重复：" + index);
+      seen.add(index);
+      const shot = {...next[index - 1]};
+      if ("subtitle" in scene) {
+        if (typeof scene.subtitle !== "string") throw Error("分镜 " + index + " 的 subtitle 必须是文本");
+        shot.caption = scene.subtitle;
+      }
+      if ("tag" in scene) {
+        if (!tags.includes(scene.tag)) throw Error("分镜 " + index + " 的 tag 无效");
+        shot.tag = scene.tag;
+      }
+      if ("bgPreset" in scene) {
+        if (!backgrounds.has(scene.bgPreset)) throw Error("分镜 " + index + " 的 bgPreset 无效");
+        shot.theme = backgrounds.get(scene.bgPreset);
+        shot.source = "dynamic";
+      }
+      if ("cameraMotion" in scene) {
+        if (!motions.has(scene.cameraMotion)) throw Error("分镜 " + index + " 的 cameraMotion 无效");
+        shot.motion = motions.get(scene.cameraMotion);
+      }
+      next[index - 1] = shot;
+    }
+    this.save();
+    this.shots = next;
+    return seen.size;
   }
   export() {
     return JSON.stringify({ version: 1, shots: this.shots }, null, 2);

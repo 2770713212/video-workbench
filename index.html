@@ -21,6 +21,8 @@
           <h1>拉片拆解与节奏克隆</h1>
         </div>
         <div class="actions">
+          <button id="aiCopy">复制 AI 改写提示词</button>
+          <button id="aiImport">导入 AI 脚本 (JSON)</button>
           <button id="demo">▸ 加载内置测试样片</button
           ><button id="load">↑ 导入视频</button
           ><button id="export" class="primary">⇩ 导出视频</button>
@@ -138,6 +140,26 @@
       accept="image/*,video/*"
       hidden
     /><input id="json" type="file" accept=".json" hidden />
+    <dialog id="topicDialog" aria-labelledby="topicTitle">
+      <form id="topicForm">
+        <h3 id="topicTitle">复制 AI 改写提示词</h3>
+        <label for="aiTopic">新视频主题/核心卖点</label>
+        <input id="aiTopic" placeholder="例如：大学生早八极简护肤" required autofocus />
+        <textarea id="manualPrompt" aria-label="可手动复制的提示词" readonly hidden></textarea>
+        <p class="feedback" id="copyError" role="alert"></p>
+        <div class="dialogActions"><button type="button" data-close>取消</button><button class="primary">生成并复制</button></div>
+      </form>
+    </dialog>
+    <dialog id="scriptDialog" aria-labelledby="scriptTitle">
+      <form id="scriptForm">
+        <h3 id="scriptTitle">导入 AI 脚本 (JSON)</h3>
+        <label for="aiScript">粘贴 AI 返回的分镜脚本</label>
+        <textarea id="aiScript" rows="9" aria-describedby="scriptError" placeholder='{"scenes": [...]}' autofocus></textarea>
+        <p class="feedback" id="scriptError" role="alert"></p>
+        <div class="dialogActions"><button type="button" data-close>取消</button><button class="primary">解析并覆盖分镜</button></div>
+      </form>
+    </dialog>
+    <div id="toast" role="status" hidden></div>
     <script type="module" src="./js/app.js"></script>
   </body>
 </html>

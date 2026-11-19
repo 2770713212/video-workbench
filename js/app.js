@@ -74,7 +74,7 @@ function activate(i) {
 }
 function limit() {
   $("limit").textContent =
-    Array.from($("caption").value).length +
+    Array.from($("caption").value.replace(/\[([^\]]*)\]/g, "$1")).length +
     " 字 / 建议 ≤ " +
     Math.floor(store.shots[selected].duration * 4.5) +
     " 字";
@@ -109,7 +109,10 @@ function render() {
     img.src = s.thumbnailDataUrl;
     img.alt = "";
     span.textContent = num(i) + "　" + s.duration.toFixed(1) + "s";
-    card.append(img, span);
+    const caption = document.createElement("small");
+    caption.className = "cardCaption";
+    caption.textContent = s.caption;
+    card.append(img, span, caption);
     card.onclick = b.onclick = () => jump(s.startTime);
     $("blocks").append(b);
     $("cards").append(card);
@@ -223,6 +226,7 @@ for (const key of ["tag", "motion", "theme"])
 $("caption").onfocus = () => stop();
 $("caption").oninput = (e) => {
   store.edit(selected, { caption: e.target.value });
+  $("cards").children[selected].querySelector(".cardCaption").textContent = e.target.value;
   limit();
   renderer.draw(renderer.time);
   $("undo").disabled = false;
@@ -343,3 +347,58 @@ for (const panel of document.querySelectorAll(".panel")) {
   };
   panel.querySelector("h2").append(toggle);
 }
+
+let toastTimer;
+function toast(message) {
+  clearTimeout(toastTimer);
+  $("toast").textContent = message;
+  $("toast").hidden = false;
+  toastTimer = setTimeout(() => { $("toast").hidden = true; }, 3000);
+}
+for (const button of document.querySelectorAll("[data-close]")) {
+  button.onclick = () => button.closest("dialog").close();
+}
+$("aiCopy").onclick = () => {
+  stop();
+  $("copyError").textContent = "";
+  $("manualPrompt").hidden = true;
+  $("topicDialog").showModal();
+};
+$("topicForm").onsubmit = async (event) => {
+  event.preventDefault();
+  let prompt;
+  try {
+    prompt = store.exportAIPrompt($("aiTopic").value);
+    await navigator.clipboard.writeText(prompt);
+    $("topicDialog").close();
+    toast("AI 改写提示词已复制");
+  } catch (error) {
+    if (!prompt) { $("copyError").textContent = error.message; return; }
+    const field = $("manualPrompt");
+    field.hidden = false;
+    field.value = prompt;
+    field.select();
+    if (document.execCommand("copy")) {
+      $("topicDialog").close();
+      toast("AI 改写提示词已复制");
+    } else {
+      $("copyError").textContent = "浏览器未允许自动复制，请手动复制选中的提示词。";
+    }
+  }
+};
+$("aiImport").onclick = () => {
+  stop();
+  $("scriptError").textContent = "";
+  $("scriptDialog").showModal();
+};
+$("aiScript").oninput = () => { $("scriptError").textContent = ""; };
+$("scriptForm").onsubmit = async (event) => {
+  event.preventDefault();
+  let count;
+  try { count = store.importAIScript($("aiScript").value); }
+  catch (error) { $("scriptError").textContent = error.message; return; }
+  $("scriptDialog").close();
+  render();
+  await jump(renderer.time);
+  toast("已导入 " + count + " 个分镜，可一键撤销");
+};
